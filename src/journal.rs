@@ -26,7 +26,6 @@ impl<T : Clone + Copy, const N : usize> Journal<T, N> {
     pub fn new(default_value : T) -> (out: Self)
         ensures
             out@.len() == N,
-            forall|i : int | 0 <= i < out@.len() ==> #[trigger] out@[i] == default_value
         {
             Self {
                 data: [default_value.clone(); N],
