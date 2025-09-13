@@ -1,3 +1,5 @@
+use std::collections::VecDeque;
+
 use vstd::prelude::*;
 
 verus!{
@@ -47,13 +49,15 @@ impl <T: Copy, const N: usize> Filesystem<T, N> {
     }
 }
 
-pub struct Journal<T: Copy> 
+pub struct Journal<'a, T: Copy, const N : usize> 
 {
-    log : Vec<(usize, T)>, // keep a tuple of (index, data)
-    is_transaction: bool // flag to determine whether in transaction or items committed 
+    log : VecDeque<(usize, T)>, // keep a tuple of (index, data). Use VecDeque for O(1) removal in checkpointing
+    last_commit: usize, // index of last item commited in log (inclusive)
+    last_checkpoint: usize, // index of last item written to filesystem from log and not truncated (inclusive)
+    filesystem: &'a Filesystem<T, N> // keep a reference of filesystem to be 
 }
 
-impl<T: Copy> View for Journal <T>
+impl<'a, T: Copy, const N: usize> View for Journal<'a, T, N>
 {
     // We use (usize,T) so that we can produce a sequence of this tuple. V has to match the return type
     type V = Seq<(usize, T)>; 
@@ -65,17 +69,39 @@ impl<T: Copy> View for Journal <T>
     }
 }
 
-impl <T: Copy> Journal<T> 
+impl<'a, T:Copy, const N : usize> Journal<'a, T, N> {
+    // the checkpoint pointer must be less than or equal to the commit
+    // at all times in the journal
+    pub closed spec fn checkpoint_leq_commit(self) -> bool {
+        self.last_checkpoint <= self.last_commit
+    }
+}
+
+impl <'a, T: Copy, const N : usize> Journal<'a, T, N> 
 {
-    pub fn new() -> (out: Self)
+    pub fn new(filesystem : &'a Filesystem<T,N>) -> (out: Self)
         ensures
-            out@ == Seq::<(usize, T)>::empty()
+            out@ == Seq::<(usize, T)>::empty(),
+            out.checkpoint_leq_commit()
         {
             Self
             {
-                log: Vec::new(), 
-                is_transaction : false
+                log: VecDeque::new(), 
+                last_commit: 0,
+                last_checkpoint: 0,
+                filesystem: filesystem
             }
         }
+
+    pub fn write(&mut self, index: usize, data : T)
+        requires
+            index < N
+        ensures
+            self@.len() == old(self)@.len() + 1,
+            self@.last() == (index, data)
+        {
+            self.log.push_back((index, data));
+        }
+
 }
 }
