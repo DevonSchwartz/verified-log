@@ -1,6 +1,6 @@
 use std::collections::VecDeque;
 
-use vstd::prelude::*;
+use vstd::{prelude::*, tokens::seq::GhostSeqAuth};
 
 verus!{
 
@@ -41,7 +41,7 @@ impl <T: Copy, const N: usize> Filesystem<T, N> {
      */
     pub fn set_block(&mut self, index : usize, data: T) 
         requires
-            index < old(self)@.len(),
+            index < N,
         ensures
             self@[index as int] == data
     {
@@ -49,15 +49,14 @@ impl <T: Copy, const N: usize> Filesystem<T, N> {
     }
 }
 
-pub struct Journal<'a, T: Copy, const N : usize> 
+pub struct Journal<T: Copy, const N : usize> 
 {
-    log : VecDeque<(usize, T)>, // keep a tuple of (index, data). Use VecDeque for O(1) removal in checkpointing
-    last_commit: usize, // index of last item commited in log (inclusive)
-    last_checkpoint: usize, // index of last item written to filesystem from log and not truncated (inclusive)
-    filesystem: &'a Filesystem<T, N> // keep a reference of filesystem to be 
+    pub log : VecDeque<(usize, T)>, // keep a tuple of (index, data). Use VecDeque for O(1) removal in checkpointing
+    pub last_commit: usize, // exclusive bound of last item commited in log 
+    pub filesystem: Filesystem<T, N>,// keep a reference of filesystem to be 
 }
 
-impl<'a, T: Copy, const N: usize> View for Journal<'a, T, N>
+impl<T: Copy, const N: usize> View for Journal<T, N>
 {
     // We use (usize,T) so that we can produce a sequence of this tuple. V has to match the return type
     type V = Seq<(usize, T)>; 
@@ -69,39 +68,103 @@ impl<'a, T: Copy, const N: usize> View for Journal<'a, T, N>
     }
 }
 
-impl<'a, T:Copy, const N : usize> Journal<'a, T, N> {
-    // the checkpoint pointer must be less than or equal to the commit
-    // at all times in the journal
-    pub closed spec fn checkpoint_leq_commit(self) -> bool {
-        self.last_checkpoint <= self.last_commit
+impl<T:Copy, const N : usize> Journal<T, N> {
+    /**
+     * Make sure that the bits from the checkpointed sequence have been written to the filsystem
+     */
+    closed spec fn filesystem_matches_checkpoint(self, checkpointed: Seq<(usize, T)>) -> bool 
+    {
+        forall | i : int| 0 <= i < checkpointed.len() 
+            ==> #[trigger] self.filesystem@[checkpointed[i].0 as int] == checkpointed[i].1 
     }
 }
 
-impl <'a, T: Copy, const N : usize> Journal<'a, T, N> 
+impl <T: Copy, const N : usize> Journal<T, N> 
 {
-    pub fn new(filesystem : &'a Filesystem<T,N>) -> (out: Self)
+    /**
+     * Craete a log for filesystem
+     * The log should be empty 
+    */
+    pub fn new(filesystem : Filesystem<T,N>) -> (out: Self)
         ensures
             out@ == Seq::<(usize, T)>::empty(),
-            out.checkpoint_leq_commit()
+            out.last_commit == out@.len()
         {
             Self
             {
                 log: VecDeque::new(), 
                 last_commit: 0,
-                last_checkpoint: 0,
-                filesystem: filesystem
+                filesystem,
             }
         }
 
+    /**
+     * Write data to the end of the log
+     * Index must be in the bounds of the filesystem
+     */
     pub fn write(&mut self, index: usize, data : T)
         requires
+            forall |i : int| 0 <= i < old(self)@.len() ==> #[trigger] old(self)@[i].0 < N,
             index < N
         ensures
             self@.len() == old(self)@.len() + 1,
-            self@.last() == (index, data)
+            self@.last() == (index, data),
+            forall |i : int| 0 <= i < self@.len() ==> #[trigger] self@[i].0 < N,
         {
             self.log.push_back((index, data));
         }
 
+    /**
+     * Increase the commit pointer to the length of the log where the last write was made
+     * Checkpoint data and truncate each element once written to filesytem
+     */
+    pub fn commit (&mut self)
+        requires
+            // all elements in the log are in range of the filesystem before and after call
+            forall |i : int| 0 <= i < old(self)@.len() ==> #[trigger] old(self)@[i].0 < N,
+        ensures
+            self.last_commit == self@.len(),
+            self@.len() >= old(self)@.len(), // we are shrinking but never growing, so impossible to add out of range item
+            forall |i : int| 0 <= i < self@.len() ==> #[trigger] self@[i].0 < N,
+        {
+            self.last_commit = self.log.len();
+            // self.checkpoint();
+        }
+
+    /**
+     * Write each block of data from the log to the filesystem
+     * each time, teh commit pointer must be decreased by 1
+     * The commit pointer may not be caught up with all the writes, but it should be equal to the
+     * old commit pointer minus the number of elements removed
+     */
+    fn checkpoint(&mut self)
+        requires
+            forall |i : int| 0 <= i < old(self)@.len() ==> #[trigger] old(self)@[i].0 < N,
+        ensures
+            self@.len() <= old(self)@.len(),
+            forall |i : int| 0 <= i < self@.len() ==> #[trigger] self@[i].0 < N,
+            self.filesystem_matches_checkpoint(old(self)@.take(old(self)@.len() - self@.len())),
+        {
+            // loop until all the elements from [0, last_commit) are written to filesytem
+            while self.last_commit > 0
+                invariant
+                    self.last_commit >= 0,
+                    forall |i : int| 0 <= i < self@.len() ==> #[trigger] self@[i].0 < N,
+                    self@.len() <= old(self)@.len(),
+                decreases self.last_commit
+                {
+                    let old_length = self.log.len();
+                    assert(old_length == self@.len()); 
+                    match self.log.pop_front() 
+                    {
+                        Some((index, data)) => self.filesystem.set_block(index, data),
+                        None => break // This should never execute because 
+                    };
+                    assert(self@.len() == (old_length - 1) as int); 
+                    // update pointer to ensure consistency 
+                    self.last_commit = self.last_commit - 1; 
+                }
+
+        }
 }
 }
