@@ -140,8 +140,9 @@ impl <T: Copy, const N : usize> Journal<T, N>
     fn checkpoint(&mut self)
         requires
             forall |i : int| 0 <= i < old(self)@.len() ==> #[trigger] old(self)@[i].0 < N,
+            old(self).last_commit <= old(self)@.len()
         ensures
-            self@.len() <= old(self)@.len(),
+            self.last_commit <= self@.len() <= old(self)@.len(),
             forall |i : int| 0 <= i < self@.len() ==> #[trigger] self@[i].0 < N,
             self.filesystem_matches_checkpoint(old(self)@.take(old(self)@.len() - self@.len())),
         {
@@ -150,17 +151,16 @@ impl <T: Copy, const N : usize> Journal<T, N>
                 invariant
                     self.last_commit >= 0,
                     forall |i : int| 0 <= i < self@.len() ==> #[trigger] self@[i].0 < N,
-                    self@.len() <= old(self)@.len(),
+                    self.last_commit <= self@.len() <= old(self)@.len()
                 decreases self.last_commit
                 {
-                    let old_length = self.log.len();
-                    assert(old_length == self@.len()); 
-                    match self.log.pop_front() 
+                    let(index, data) = match self.log.pop_front() 
                     {
-                        Some((index, data)) => self.filesystem.set_block(index, data),
+                        Some((index, data)) => (index, data),
                         None => break // This should never execute because 
                     };
-                    assert(self@.len() == (old_length - 1) as int); 
+                    self.filesystem.set_block(index, data); 
+                    assert(self.filesystem@[index as int] == data); 
                     // update pointer to ensure consistency 
                     self.last_commit = self.last_commit - 1; 
                 }
