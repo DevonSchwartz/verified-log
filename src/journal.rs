@@ -72,7 +72,7 @@ impl<T:Copy, const N : usize> Journal<T, N> {
     /**
      * Make sure that the bits from the checkpointed sequence have been written to the filsystem
      */
-    closed spec fn filesystem_matches_checkpoint(self, checkpointed: Seq<(usize, T)>) -> bool 
+    pub closed spec fn filesystem_matches_checkpoint(self, checkpointed: Seq<(usize, T)>) -> bool 
     {
         forall | i : int| 0 <= i < checkpointed.len() 
             ==> #[trigger] self.filesystem@[checkpointed[i].0 as int] == checkpointed[i].1 
@@ -107,9 +107,8 @@ impl <T: Copy, const N : usize> Journal<T, N>
             forall |i : int| 0 <= i < old(self)@.len() ==> #[trigger] old(self)@[i].0 < N,
             index < N
         ensures
-            self@.len() == old(self)@.len() + 1,
             self@.last() == (index, data),
-            forall |i : int| 0 <= i < self@.len() ==> #[trigger] self@[i].0 < N,
+            self@ == old(self)@.push((index, data)),
         {
             self.log.push_back((index, data));
         }
@@ -122,49 +121,70 @@ impl <T: Copy, const N : usize> Journal<T, N>
         requires
             // all elements in the log are in range of the filesystem before and after call
             forall |i : int| 0 <= i < old(self)@.len() ==> #[trigger] old(self)@[i].0 < N,
+            old(self).last_commit <= old(self)@.len()
         ensures
             self.last_commit == self@.len(),
-            self@.len() >= old(self)@.len(), // we are shrinking but never growing, so impossible to add out of range item
-            forall |i : int| 0 <= i < self@.len() ==> #[trigger] self@[i].0 < N,
         {
             self.last_commit = self.log.len();
             // self.checkpoint();
         }
-
-    /**
-     * Write each block of data from the log to the filesystem
-     * each time, teh commit pointer must be decreased by 1
-     * The commit pointer may not be caught up with all the writes, but it should be equal to the
-     * old commit pointer minus the number of elements removed
-     */
-    fn checkpoint(&mut self)
+    
+    pub fn checkpoint(&mut self)
         requires
-            forall |i : int| 0 <= i < old(self)@.len() ==> #[trigger] old(self)@[i].0 < N,
-            old(self).last_commit <= old(self)@.len()
+            0 <= old(self).last_commit <= old(self)@.len(),
+            forall |i : int| 0 <= i < old(self)@.len() ==> #[trigger] old(self)@[i].0 < N, 
         ensures
-            self.last_commit <= self@.len() <= old(self)@.len(),
-            forall |i : int| 0 <= i < self@.len() ==> #[trigger] self@[i].0 < N,
-            self.filesystem_matches_checkpoint(old(self)@.take(old(self)@.len() - self@.len())),
+            0 <= self.last_commit <= self@.len(),
+            self@ == old(self)@.skip(old(self).last_commit as int), // we truncated last_commit elements 
+            forall | i: int| 0 <= i < old(self)@.len() - self@.len() && self.last_commit > 0 ==> 
+                #[trigger] self.filesystem@[old(self)@[i].0 as int] == old(self)@[i].1
+        decreases old(self).last_commit
+    {
+        if self.last_commit > 0 
         {
-            // loop until all the elements from [0, last_commit) are written to filesytem
-            while self.last_commit > 0
-                invariant
-                    self.last_commit >= 0,
-                    forall |i : int| 0 <= i < self@.len() ==> #[trigger] self@[i].0 < N,
-                    self.last_commit <= self@.len() <= old(self)@.len()
-                decreases self.last_commit
-                {
-                    let(index, data) = match self.log.pop_front() 
-                    {
-                        Some((index, data)) => (index, data),
-                        None => break // This should never execute because 
-                    };
-                    self.filesystem.set_block(index, data); 
-                    assert(self.filesystem@[index as int] == data); 
-                    // update pointer to ensure consistency 
-                    self.last_commit = self.last_commit - 1; 
-                }
-
+            let (index, data) = self.log.pop_front().unwrap(); // safe unwrap because last_commit > 0
+            self.filesystem.set_block(index, data);
+            self.last_commit = self.last_commit - 1;
+            assert(forall | i: int| 0 <= i < old(self)@.len() - self@.len() ==> 
+                #[trigger] self.filesystem@[old(self)@[i].0 as int] == old(self)@[i].1);
+            self.checkpoint();
         }
+    }
+
+    // /**
+    //  * Write each block of data from the log to the filesystem
+    //  * each time, teh commit pointer must be decreased by 1
+    //  * The commit pointer may not be caught up with all the writes, but it should be equal to the
+    //  * old commit pointer minus the number of elements removed
+    //  */
+    // fn checkpoint(&mut self)
+    //     requires
+    //         forall |i : int| 0 <= i < old(self)@.len() ==> #[trigger] old(self)@[i].0 < N,
+    //         old(self).last_commit <= old(self)@.len()
+    //     ensures
+    //         self.last_commit <= self@.len() <= old(self)@.len(),
+    //         forall |i : int| 0 <= i < self@.len() ==> #[trigger] self@[i].0 < N,
+    //         self.filesystem_matches_checkpoint(old(self)@.take(old(self)@.len() - self@.len())),
+    //     {
+    //         // loop until all the elements from [0, last_commit) are written to filesytem
+    //         while self.last_commit > 0
+    //             invariant
+    //                 self.last_commit >= 0,
+    //                 forall |i : int| 0 <= i < self@.len() ==> #[trigger] self@[i].0 < N,
+    //                 self.last_commit <= self@.len() <= old(self)@.len()
+    //             decreases self.last_commit
+    //             {
+    //                 let(index, data) = match self.log.pop_front() 
+    //                 {
+    //                     Some((index, data)) => (index, data),
+    //                     None => break // This should never execute because 
+    //                 };
+    //                 self.filesystem.set_block(index, data); 
+    //                 assert(self.filesystem@[index as int] == data); 
+    //                 // update pointer to ensure consistency 
+    //                 self.last_commit = self.last_commit - 1; 
+    //             }
+
+    //     }
 }
 }
