@@ -228,7 +228,7 @@ impl <T: Copy, const N : usize> Journal<T, N>
         while idx < self.last_commit
             invariant
                 idx <= self.last_commit <= self@.len(),
-                forall |i : int| 0 <= i < self.last_commit ==> #[trigger] self@[i].0 < N,
+                forall | i : int| 0 <= i < self.last_commit ==> #[trigger] self@[i].0 < N,
                 forall | i : int| 0 <= i < idx ==> 
                     #[trigger] filesystem@[self@[i].0 as int] == self@[i].1 
             decreases self.last_commit - idx
