@@ -1,8 +1,7 @@
-use std::collections::VecDeque;
+use vstd::prelude::*;
 
-use vstd::{prelude::*, tokens::seq::GhostSeqAuth};
-
-verus!{
+verus!
+{
 
 pub struct Filesystem<T: Copy, const N: usize> 
 {
@@ -23,7 +22,8 @@ impl<T: Copy, const N: usize> View for Filesystem<T, N>
 }
 
 
-impl <T: Copy, const N: usize> Filesystem<T, N> {
+impl <T: Copy, const N: usize> Filesystem<T, N> 
+{
     pub fn new(default_value : T) -> (out: Self)
         ensures
             out@.len() == N,
@@ -51,17 +51,19 @@ impl <T: Copy, const N: usize> Filesystem<T, N> {
 
 pub struct Journal<T: Copy, const N : usize> 
 {
-    pub log : Vec<(usize, T)>, // keep a tuple of (index, data). Use VecDeque for O(1) removal in checkpointing
-    pub last_commit: usize, // exclusive bound of last item commited in log 
+    pub log: [T;N], 
+    pub last_commit: usize, // exclusive bound of last item comitted  
+    pub last_checkpoint: usize, // 0 <= i < checkpoint items were written to filesystem
+    pub write_ptr: usize // where to make next write
 }
 
 impl<T: Copy, const N: usize> View for Journal<T, N>
 {
     // We use (usize,T) so that we can produce a sequence of this tuple. V has to match the return type
-    type V = Seq<(usize, T)>; 
+    type V = Seq<T>; 
 
     // the view of the journal should be a sequence of its data
-    closed spec fn view(&self) -> Seq<(usize, T)>
+    closed spec fn view(&self) -> Seq<T>
     {
         self.log@
     }
@@ -85,15 +87,19 @@ impl <T: Copy, const N : usize> Journal<T, N>
      * Craete a log for filesystem
      * The log should be empty 
     */
-    pub fn new() -> (out: Self)
+    pub fn new(default_value: T) -> (out: Self)
         ensures
-            out@ == Seq::<(usize, T)>::empty(),
-            out.last_commit == out@.len()
+            forall|i : int | 0 <= i < out@.len() ==> #[trigger] out@[i] == default_value,
+            out.last_commit == 0,
+            out.write_ptr == 0,
+            out.last_checkpoint == 0
         {
             Self
             {
-                log: Vec::new(), 
+                log: [default_value; N], 
                 last_commit: 0,
+                last_checkpoint: 0,
+                write_ptr: 0,
             }
         }
 
@@ -101,33 +107,40 @@ impl <T: Copy, const N : usize> Journal<T, N>
      * Write data to the end of the log
      * Index must be in the bounds of the filesystem
      */
-    pub fn write(&mut self, index: usize, data : T)
+    pub fn write(&mut self, data : T)
         requires
-            forall |i : int| 0 <= i < old(self)@.len() ==> #[trigger] old(self)@[i].0 < N,
-            index < N
+            old(self).write_ptr < self@.len(),
         ensures
-            self@.len() == old(self)@.len() + 1,
-            self@.last() == (index, data),
-            forall |i : int| 0 <= i < self@.len() ==> #[trigger] self@[i].0 < N,
+            old(self).write_ptr == self@.len() - 1 ==> self.write_ptr == 0, 
+            old(self).write_ptr < self@.len() - 1 ==> self.write_ptr == old(self).write_ptr + 1,
+            self@[old(self).write_ptr] == data,
         {
-            self.log.push((index, data));
+            self.log[self.write_ptr] = data;
+            if self.write_ptr == self.log.len() - 1
+            {
+                self.write_ptr = 0; 
+            }
+            else
+            {
+                self.write_ptr += 1;
+            }
         }
 
     /**
      * Increase the commit pointer to the length of the log where the last write was made
      * Checkpoint data and truncate each element once written to filesytem
      */
-    pub fn commit (&mut self)
-        requires
-            // all elements in the log are in range of the filesystem before and after call
-            forall |i : int| 0 <= i < old(self)@.len() ==> #[trigger] old(self)@[i].0 < N,
-            old(self).last_commit <= old(self)@.len(),
-        ensures
-            self.last_commit == self@.len(),
-        {
-            self.last_commit = self.log.len();
-            // self.checkpoint();
-        }
+    // pub fn commit (&mut self)
+    //     requires
+    //         // all elements in the log are in range of the filesystem before and after call
+    //         forall |i : int| 0 <= i < old(self)@.len() ==> #[trigger] old(self)@[i].0 < N,
+    //         old(self).last_commit <= old(self)@.len(),
+    //     ensures
+    //         self.last_commit == self@.len(),
+    //     {
+    //         self.last_commit = self.log.len();
+    //         // self.checkpoint();
+    //     }
     
     /**
      * Write each block of data from the log to the filesystem
@@ -158,23 +171,23 @@ impl <T: Copy, const N : usize> Journal<T, N>
     //             }
     //     }
 
-    proof fn lemma_decreases_commit_decreases_length(log: Seq<(usize, T)>, commit : nat) 
-        requires
-            commit <= log.len()
-        ensures
-            commit <= log.len()
-        decreases commit
-    {
-        if (commit == 0) {
-            // do nothing 
-        } else {
-            let new_log = log.skip(1);
-            let new_commit = commit - 1;
-            // Add an explicit assertion that new_commit <= new_log.len()
-            assert(new_commit <= new_log.len());
-            Self::lemma_decreases_commit_decreases_length(new_log, new_commit as nat)
-        }
-    }
+    // proof fn lemma_decreases_commit_decreases_length(log: Seq<(usize, T)>, commit : nat) 
+    //     requires
+    //         commit <= log.len()
+    //     ensures
+    //         commit <= log.len()
+    //     decreases commit
+    // {
+    //     if (commit == 0) {
+    //         // do nothing 
+    //     } else {
+    //         let new_log = log.skip(1);
+    //         let new_commit = commit - 1;
+    //         // Add an explicit assertion that new_commit <= new_log.len()
+    //         assert(new_commit <= new_log.len());
+    //         Self::lemma_decreases_commit_decreases_length(new_log, new_commit as nat)
+    //     }
+    // }
 
     // fn checkpoint(&mut self)
     //     requires
@@ -216,32 +229,32 @@ impl <T: Copy, const N : usize> Journal<T, N>
     //         }
     //     }
 
-    fn checkpoint(&self, filesystem : &mut Filesystem<T,N>)
-        requires
-            self.last_commit <= self@.len(),
-            forall |i : int| 0 <= i < self.last_commit ==> #[trigger] self@[i].0 < N 
-        ensures
-            forall | i : int| 0 <= i < self.last_commit ==> 
-                #[trigger] filesystem@[self@[i].0 as int] == self@[i].1 
-    {
-        let mut idx = 0;
-        while idx < self.last_commit
-            invariant
-                idx <= self.last_commit <= self@.len(),
-                forall | i : int| 0 <= i < self.last_commit ==> #[trigger] self@[i].0 < N,
-                forall | i : int| 0 <= i < idx ==> 
-                    #[trigger] filesystem@[self@[i].0 as int] == self@[i].1 
-            decreases self.last_commit - idx
-            {
-                assert(forall | i : int| 0 <= i < idx ==> 
-                    #[trigger] filesystem@[self@[i as int].0 as int] == self@[i].1);                
-                filesystem.set_block(self.log[idx].0, self.log[idx].1);
-                // assert(forall | i : int| 0 <= i < idx ==> 
-                //     #[trigger] filesystem@[self@[i as int].0 as int] == self@[i].1);  
-                idx += 1; 
-            }
-        assert(forall | i : int| 0 <= i < idx ==> 
-            #[trigger] filesystem@[self@[i].0 as int] == self@[i].1)
-    }
+    // fn checkpoint(&self, filesystem : &mut Filesystem<T,N>)
+    //     requires
+    //         self.last_commit <= self@.len(),
+    //         forall |i : int| 0 <= i < self.last_commit ==> #[trigger] self@[i].0 < N 
+    //     ensures
+    //         forall | i : int| 0 <= i < self.last_commit ==> 
+    //             #[trigger] filesystem@[self@[i].0 as int] == self@[i].1 
+    // {
+    //     let mut idx = 0;
+    //     while idx < self.last_commit
+    //         invariant
+    //             idx <= self.last_commit <= self@.len(),
+    //             forall | i : int| 0 <= i < self.last_commit ==> #[trigger] self@[i].0 < N,
+    //             forall | i : int| 0 <= i < idx ==> 
+    //                 #[trigger] filesystem@[self@[i].0 as int] == self@[i].1 
+    //         decreases self.last_commit - idx
+    //         {
+    //             assert(forall | i : int| 0 <= i < idx ==> 
+    //                 #[trigger] filesystem@[self@[i as int].0 as int] == self@[i].1);                
+    //             filesystem.set_block(self.log[idx].0, self.log[idx].1);
+    //             // assert(forall | i : int| 0 <= i < idx ==> 
+    //             //     #[trigger] filesystem@[self@[i as int].0 as int] == self@[i].1);  
+    //             idx += 1; 
+    //         }
+    //     assert(forall | i : int| 0 <= i < idx ==> 
+    //         #[trigger] filesystem@[self@[i].0 as int] == self@[i].1)
+    // }
 }
 }
