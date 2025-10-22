@@ -166,7 +166,7 @@ impl <T: Copy, const N : usize> Journal<T, N>
                 self@.subrange(old(self).last_checkpoint as int, self.last_checkpoint as int) 
                     == _filesystem@.subrange(old(self).last_checkpoint as int, self.last_checkpoint  as int),
 
-                old(_filesystem)@.take(old(self).last_checkpoint as int) == _filesystem@.take(old(self).last_checkpoint as int),                
+                // old(_filesystem)@.take(old(self).last_checkpoint as int) == _filesystem@.take(old(self).last_checkpoint as int),                
                 // _filesystem@ == old(_filesystem)@.take(old(self).last_checkpoint as int) + self@.subrange(old(self).last_checkpoint as int, self.last_checkpoint as int),  
             decreases old(self).last_commit - old(self).last_checkpoint 
         {
@@ -174,21 +174,64 @@ impl <T: Copy, const N : usize> Journal<T, N>
             {
                 _filesystem.set_block(self.last_checkpoint, self.log[self.last_checkpoint]);
                 self.last_checkpoint = self.last_checkpoint + 1;
-                
+
+                assert(self.last_checkpoint <= self.last_commit); 
                 
                 assert(self@.subrange(old(self).last_checkpoint as int, self.last_checkpoint as int) 
                     == _filesystem@.subrange(old(self).last_checkpoint as int, self.last_checkpoint as int));
                 assert(self@[old(self).last_checkpoint as int] == _filesystem@[old(self).last_checkpoint as int]); 
                 assert(self.last_checkpoint == old(self).last_checkpoint + 1);
+                // proof
+                // {
+                //     Self::lemma_elements_equal(self@, _filesystem@, old(self).last_checkpoint as int, self.last_checkpoint as int); 
+                // }; 
+
+                // assert(self.last_checkpoint < self.last_commit ==> _filesystem@[self.last_checkpoint as int]  == old(_filesystem)@[self.last_checkpoint as int]); 
+
 
                 self.checkpoint(_filesystem);
-                
+
+                // TODO: Assert that the construction from spec is the same as the filesystem construction
+
+
+                assert(self.last_checkpoint == old(self).last_checkpoint + (self.last_commit - old(self).last_checkpoint));
                 assert(self@[old(self).last_checkpoint as int] == old(self)@[old(self).last_checkpoint as int]); 
                 assert(self@[old(self).last_checkpoint as int] == _filesystem@[old(self).last_checkpoint as int]); 
                 // assert(self@.subrange(old(self).last_checkpoint as int, self.last_checkpoint as int) 
                 //     == _filesystem@.subrange(old(self).last_checkpoint as int, self.last_checkpoint as int));
             }
         }
-                
+
+
+        // proof fn lemma_elements_equal(log : Seq<T>, filesystem: Seq<T>, old_last_checkpoint: int, last_checkpoint: int)
+        //     requires
+        //         log.len() == filesystem.len(),
+        //         0 <= old_last_checkpoint < last_checkpoint <= log.len(),
+        //     ensures 
+        //         log.subrange(old_last_checkpoint, last_checkpoint) == filesystem.subrange(old_last_checkpoint, last_checkpoint)
+        //     {
+
+        //     }
+
+
+        // TODO: Make a spec function that creates a new filesystem sequence based off of the log
+        // It will s
+        // spec fn create_filesystem(log: Seq<T>, filesystem: Seq<T>, index: nat, old_last_checkpoint: nat, last_checkpoint: nat) -> Seq<T>
+        //     decreases old_last_checkpoint - index
+        // {
+
+        //     if index <= old_last_checkpoint <= last_checkpoint <= filesystem.len() && filesystem.len() == log.len()
+        //     {
+        //         if index < old_last_checkpoint
+        //         {
+        //             return seq![filesystem[index as int]] + Self::create_filesystem(log, filesystem, index + 1, old_last_checkpoint, last_checkpoint);
+        //         }
+        //         else if index < last_checkpoint
+        //         {
+        //             return seq![log[index as int]] + Self::create_filesystem(log, filesystem, index + 1, old_last_checkpoint, last_checkpoint);
+        //         }
+        //     }
+        //     return seq![];
+        // }
 }
 }
