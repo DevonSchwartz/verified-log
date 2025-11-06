@@ -44,6 +44,8 @@ impl <T: Copy, const N: usize> Filesystem<T, N>
             index < N,
         ensures
             self@[index as int] == data,
+            self@.take(index as int) == old(self)@.take(index as int),
+            self@.skip(index + 1) == old(self)@.skip(index + 1)
     {
         self.filesystem[index] = data; 
     }
@@ -152,9 +154,20 @@ impl <T: Copy, const N : usize> Journal<T, N>
 
                 self.last_checkpoint > old(self).last_checkpoint 
                     ==> self@[self.last_checkpoint - 1] == _filesystem@[self.last_checkpoint - 1],
+
+                self.last_checkpoint > (old(self).last_checkpoint + 1)
+                    ==> self@.subrange(self.last_checkpoint - 2 , self.last_checkpoint as int) 
+                    == _filesystem@.subrange(self.last_checkpoint - 2, self.last_checkpoint as int), 
+
+                self.last_checkpoint > (old(self).last_checkpoint + 2)
+                    ==> self@.subrange(self.last_checkpoint - 3 , self.last_checkpoint as int) 
+                    == _filesystem@.subrange(self.last_checkpoint - 3, self.last_checkpoint as int), 
+
+                self@.subrange(old(self).last_checkpoint as int, self.last_checkpoint as int) == _filesystem@.subrange(old(self).last_checkpoint as int, self.last_checkpoint as int)
         decreases self.last_commit - self.last_checkpoint
         {
-            _filesystem.set_block(self.last_checkpoint, self.log[self.last_checkpoint]);
+            // _filesystem.set_block(self.last_checkpoint, self.log[self.last_checkpoint]);
+            _filesystem.filesystem[self.last_checkpoint] = self.log[self.last_checkpoint]; // TODO: Ask on Zulip why this doesn't evaluate if set_block
             self.last_checkpoint = self.last_checkpoint + 1; 
         }
     }
