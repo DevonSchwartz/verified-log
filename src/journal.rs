@@ -41,11 +41,9 @@ impl <T: Copy, const N: usize> Filesystem<T, N>
      */
     pub fn set_block(&mut self, index : usize, data: T) 
         requires
-            index < N,
+            0 <= index < N,
         ensures
-            self@[index as int] == data,
-            self@.take(index as int) == old(self)@.take(index as int),
-            self@.skip(index + 1) == old(self)@.skip(index + 1)
+            self@ == old(self)@.update(index as int, data)
     {
         self.filesystem[index] = data; 
     }
@@ -158,8 +156,8 @@ impl <T: Copy, const N : usize> Journal<T, N>
 
         decreases self.last_commit - self.last_checkpoint
         { 
-            // _filesystem.set_block(self.last_checkpoint, self.log[self.last_checkpoint]);
-            _filesystem.filesystem[self.last_checkpoint] = self.log[self.last_checkpoint]; // TODO: Ask on Zulip why this doesn't evaluate if set_block
+            _filesystem.set_block(self.last_checkpoint, self.log[self.last_checkpoint]);
+            // _filesystem.filesystem[self.last_checkpoint] = self.log[self.last_checkpoint]; // TODO: Ask on Zulip why this doesn't evaluate if set_block
             self.last_checkpoint = self.last_checkpoint + 1; 
         }
     }
