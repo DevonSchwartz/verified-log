@@ -43,7 +43,7 @@ impl <T: Copy, const N: usize> Filesystem<T, N>
         requires
             0 <= index < N,
         ensures
-            self@ == old(self)@.update(index as int, data)
+            self@ == old(self)@.update(index as int, data) // Use .update() to say rest of sequence same except index
     {
         self.filesystem[index] = data; 
     }
@@ -123,6 +123,7 @@ impl <T: Copy, const N : usize> Journal<T, N>
             self.checkpoint(_filesystem);
         }
 
+    
     fn checkpoint(&mut self, _filesystem: &mut Filesystem<T, N>)
         requires
             0 <= old(self).last_checkpoint <= old(self).last_commit <= old(_filesystem)@.len()
@@ -144,7 +145,7 @@ impl <T: Copy, const N : usize> Journal<T, N>
                 0 <= old(self).last_checkpoint <= self.last_checkpoint <= self.last_commit <= _filesystem@.len(),
 
                 forall |i : int| old(self).last_checkpoint as int <= i < self.last_checkpoint ==> #[trigger]
-                    self@[i] == _filesystem@[i]
+                    self@[i] == _filesystem@[i] // WHY DOES FORALL BEHAVE DIFFERENTLY THAN SUBRANGE? 
 
         decreases self.last_commit - self.last_checkpoint
         { 
