@@ -116,15 +116,18 @@ impl <T: Copy, const N : usize> Journal<T, N>
             0 <= old(self).last_checkpoint <= old(self).last_commit <= old(self).write_ptr <= N,
         ensures
             0 <= self.last_checkpoint <= self.last_commit == self.write_ptr <= N,
+            forall |i : int| old(self).last_checkpoint as int <= i < self.last_checkpoint ==> #[trigger]
+                self@[i] == _filesystem@[i]
         {
             self.last_commit = self.write_ptr;
-            // self.checkpoint(_filesystem);
+            self.checkpoint(_filesystem);
         }
 
     fn checkpoint(&mut self, _filesystem: &mut Filesystem<T, N>)
         requires
             0 <= old(self).last_checkpoint <= old(self).last_commit <= old(_filesystem)@.len()
         ensures
+            old(self).write_ptr == self.write_ptr, // this is still important to guarentee 
             old(self).last_commit == self.last_commit,
             0 <= old(self).last_checkpoint <= self.last_checkpoint == self.last_commit <= _filesystem@.len(),
             self@ == old(self)@,
@@ -134,6 +137,7 @@ impl <T: Copy, const N : usize> Journal<T, N>
         while self.last_checkpoint < self.last_commit
             invariant
                 self@ == old(self)@,
+                old(self).write_ptr == self.write_ptr, 
 
                 old(self).last_commit == self.last_commit,
 
