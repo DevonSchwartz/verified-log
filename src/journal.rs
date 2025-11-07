@@ -69,18 +69,6 @@ impl<T: Copy, const N: usize> View for Journal<T, N>
     }
 }
 
-// impl<T:Copy, const N : usize> Journal<T, N> 
-// {
-//     /**
-//      * Make sure that the bits from the checkpointed sequence have been written to the filsystem
-//      */
-//     closed spec fn filesystem_matches_checkpoint(self, checkpointed: Seq<(usize, T)>) -> bool 
-//     {
-//         forall | i : int| 0 <= i < checkpointed.len() 
-//             ==> #[trigger] self.filesystem@[checkpointed[i].0 as int] == checkpointed[i].1 
-//     }
-// }
-
 impl <T: Copy, const N : usize> Journal<T, N> 
 {
     /**
@@ -157,7 +145,6 @@ impl <T: Copy, const N : usize> Journal<T, N>
         decreases self.last_commit - self.last_checkpoint
         { 
             _filesystem.set_block(self.last_checkpoint, self.log[self.last_checkpoint]);
-            // _filesystem.filesystem[self.last_checkpoint] = self.log[self.last_checkpoint]; // TODO: Ask on Zulip why this doesn't evaluate if set_block
             self.last_checkpoint = self.last_checkpoint + 1; 
         }
     }
