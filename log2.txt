@@ -1,0 +1,102 @@
+note: verifying module journal
+
+note: Analyzing prover log for module journal ...
+
+note: Log analysis complete for module journal
+
+note: Profile statistics for module journal
+
+note: Observed 260 total instantiations of user-level quantifiers
+
+note: Cost * Instantiations: 44073 (Instantiated 83 times - 31% of the total, cost 531) top 1 of 14 user-level quantifiers.
+   --> /home/devon/verus/vstd/seq.rs:298:9
+    |
+294 | pub broadcast axiom fn axiom_seq_new_index<A>(len: nat, f: spec_fn(int) -> A, i: int)
+    | ------------------------------------------------------------------------------------- Triggers selected for this quantifier
+...
+298 |         #[trigger] Seq::new(len, f)[i] == f(i),
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+note: Cost * Instantiations: 4864 (Instantiated 32 times - 12% of the total, cost 152) top 2 of 14 user-level quantifiers.
+  --> /home/devon/verus/vstd/array.rs:54:20
+   |
+50 | pub broadcast proof fn lemma_array_index<T, const N: usize>(a: [T; N], i: int)
+   | ------------------------------------------------------------------------------ Triggers selected for this quantifier
+...
+54 |         #![trigger array_index(a, i)]
+   |                    ^^^^^^^^^^^^^^^^^
+
+note: Cost * Instantiations: 1386 (Instantiated 14 times - 5% of the total, cost 99) top 3 of 14 user-level quantifiers.
+   --> /home/devon/verus/vstd/seq.rs:345:9
+    |
+343 | pub broadcast axiom fn axiom_seq_ext_equal<A>(s1: Seq<A>, s2: Seq<A>)
+    | --------------------------------------------------------------------- Triggers selected for this quantifier
+344 |     ensures
+345 |         #[trigger] (s1 =~= s2) <==> {
+    |         ^^^^^^^^^^^^^^^^^^^^^^
+
+note: Cost * Instantiations: 946 (Instantiated 22 times - 8% of the total, cost 43) top 4 of 14 user-level quantifiers.
+   --> /home/devon/verus/vstd/seq.rs:291:20
+    |
+289 | pub broadcast axiom fn axiom_seq_new_len<A>(len: nat, f: spec_fn(int) -> A)
+    | --------------------------------------------------------------------------- Triggers selected for this quantifier
+290 |     ensures
+291 |         #[trigger] Seq::new(len, f).len() == len,
+    |                    ^^^^^^^^^^^^^^^^^^^^^^
+
+note: Cost * Instantiations: 899 (Instantiated 29 times - 11% of the total, cost 31) top 5 of 14 user-level quantifiers.
+   --> src/journal.rs:149:99
+    |
+149 |                    forall |i : int| old(self).last_checkpoint as int <= i < self.last_checkpoint ==> #[trigger]
+    |  __________________-                                                                                 ^
+    | | ___________________________________________________________________________________________________|
+150 | ||                     self@[i] == self.filesystem@[i] // WHY DOES FORALL BEHAVE DIFFERENTLY THAN SUBRANGE? 
+    | ||____________________________^______________________- Triggers selected for this quantifier
+    |  |____________________________|
+    |
+
+note: Cost * Instantiations: 784 (Instantiated 28 times - 10% of the total, cost 28) top 6 of 14 user-level quantifiers.
+  --> /home/devon/verus/vstd/array.rs:84:9
+   |
+82 | pub broadcast axiom fn array_len_matches_n<T, const N: usize>(ar: &[T; N])
+   | -------------------------------------------------------------------------- Triggers selected for this quantifier
+83 |     ensures
+84 |         (#[trigger] ar@.len()) == N,
+   |         ^^^^^^^^^^^^^^^^^^^^^^
+
+note: Cost * Instantiations: 468 (Instantiated 18 times - 6% of the total, cost 26) top 7 of 14 user-level quantifiers.
+   --> /home/devon/verus/vstd/seq.rs:340:9
+    |
+334 | pub broadcast axiom fn axiom_seq_update_different<A>(s: Seq<A>, i1: int, i2: int, a: A)
+    | --------------------------------------------------------------------------------------- Triggers selected for this quantifier
+...
+340 |         #[trigger] s.update(i2, a)[i1] == s[i1],
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+note: Cost * Instantiations: 156 (Instantiated 3 times - 1% of the total, cost 52) top 8 of 14 user-level quantifiers.
+   --> /home/devon/verus/vstd/seq.rs:371:9
+    |
+366 | pub broadcast axiom fn axiom_seq_subrange_index<A>(s: Seq<A>, j: int, k: int, i: int)
+    | ------------------------------------------------------------------------------------- Triggers selected for this quantifier
+...
+371 |         #[trigger] s.subrange(j, k)[i] == s[i + j],
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+note: Cost * Instantiations: 108 (Instantiated 6 times - 2% of the total, cost 18) top 9 of 14 user-level quantifiers.
+   --> /home/devon/verus/vstd/seq.rs:331:9
+    |
+327 | pub broadcast axiom fn axiom_seq_update_same<A>(s: Seq<A>, i: int, a: A)
+    | ------------------------------------------------------------------------ Triggers selected for this quantifier
+...
+331 |         #[trigger] s.update(i, a)[i] == a,
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+note: Cost * Instantiations: 81 (Instantiated 9 times - 3% of the total, cost 9) top 10 of 14 user-level quantifiers.
+   --> /home/devon/verus/vstd/seq.rs:347:54
+    |
+347 |             &&& forall|i: int| 0 <= i < s1.len() ==> s1[i] == s2[i]
+    |                 -------------------------------------^^^^^----^^^^^
+    |                 |
+    |                 Triggers selected for this quantifier
+
+verification results:: 7 verified, 0 errors

@@ -160,7 +160,8 @@ impl <T: Copy, const N : usize> Journal<T, N>
 broadcast proof fn lemma_seq_subrange_index2<A>(s: Seq<A>, j: int, k: int, i: int)
         requires
             0 <= j <= k <= s.len(),
-            0 <= i - j < k - j,
+            i >= j && i < k, 
+            // 0 <= i - j < k - j,
         ensures
             // DANGER: might cause matching loop with axiom_seq_subrange_index
             (#[trigger] s.subrange(j, k))[i - j] == #[trigger] s[i],
