@@ -134,7 +134,7 @@ impl <T: Copy, const N : usize> Journal<T, N>
             0 <= old(self).last_checkpoint <= self.last_checkpoint == self.last_commit <= self.filesystem@.len(),
             self@ == old(self)@,
             self@.subrange(old(self).last_checkpoint as int, self.last_checkpoint as int) 
-                =~= self.filesystem@.subrange(old(self).last_checkpoint as int, self.last_checkpoint as int)
+                == self.filesystem@.subrange(old(self).last_checkpoint as int, self.last_checkpoint as int)
     {
         while self.last_checkpoint < self.last_commit
             invariant
@@ -146,7 +146,7 @@ impl <T: Copy, const N : usize> Journal<T, N>
                 0 <= old(self).last_checkpoint <= self.last_checkpoint <= self.last_commit <= self.filesystem@.len(),
 
                 self@.subrange(old(self).last_checkpoint as int, self.last_checkpoint as int) 
-                =~= self.filesystem@.subrange(old(self).last_checkpoint as int, self.last_checkpoint as int)
+                == self.filesystem@.subrange(old(self).last_checkpoint as int, self.last_checkpoint as int)
 
         decreases self.last_commit - self.last_checkpoint
         {
