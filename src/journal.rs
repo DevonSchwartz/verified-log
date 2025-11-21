@@ -124,14 +124,6 @@ impl <T: Copy, const N : usize> Journal<T, N>
             self.last_commit = self.write_ptr;
             self.checkpoint();
         }
-
-    // pub proof fn lemma_seq_forall(s1: Seq<T>, s2: Seq<T>, i : int, j:int)
-    //     requires
-    //         0 <= i < j <= s1.len() == s2.len(),
-    //         forall|x : int| i <= x < j ==> #[trigger] s1[x] == s2[x]
-    //     {
-    //         assert(forall|x : int| i <= x < j ==> #[trigger] s1[x] == s2[x])
-    //     }
     
     fn checkpoint(&mut self)
         requires
@@ -141,11 +133,8 @@ impl <T: Copy, const N : usize> Journal<T, N>
             old(self).last_commit == self.last_commit,
             0 <= old(self).last_checkpoint <= self.last_checkpoint == self.last_commit <= self.filesystem@.len(),
             self@ == old(self)@,
-            // Self::lemma_seq_forall(self@, self.filesystem@, old(self).last_checkpoint, self.last_checkpoint),  
-            // forall |i : int| old(self).last_checkpoint as int <= i < self.last_checkpoint ==> #[trigger]
-            //     self@[i] == self.filesystem@[i]
             self@.subrange(old(self).last_checkpoint as int, self.last_checkpoint as int) 
-                == self.filesystem@.subrange(old(self).last_checkpoint as int, self.last_checkpoint as int)
+                =~= self.filesystem@.subrange(old(self).last_checkpoint as int, self.last_checkpoint as int)
     {
         while self.last_checkpoint < self.last_commit
             invariant
@@ -156,11 +145,10 @@ impl <T: Copy, const N : usize> Journal<T, N>
 
                 0 <= old(self).last_checkpoint <= self.last_checkpoint <= self.last_commit <= self.filesystem@.len(),
 
-                forall |i : int| old(self).last_checkpoint as int <= i < self.last_checkpoint ==> #[trigger]
-                    self@[i] == self.filesystem@[i] // WHY DOES FORALL BEHAVE DIFFERENTLY THAN SUBRANGE? 
+                forall |i : int| old(self).last_checkpoint <= i < self.last_checkpoint ==> #[trigger] self.filesystem@[i] == self@[i]
 
         decreases self.last_commit - self.last_checkpoint
-        { 
+        {
             self.filesystem.set_block(self.last_checkpoint, self.log[self.last_checkpoint]);
             self.last_checkpoint = self.last_checkpoint + 1; 
         }
