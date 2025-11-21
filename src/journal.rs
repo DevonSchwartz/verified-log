@@ -124,7 +124,7 @@ impl <T: Copy, const N : usize> Journal<T, N>
             self.last_commit = self.write_ptr;
             self.checkpoint();
         }
-    
+
     fn checkpoint(&mut self)
         requires
             0 <= old(self).last_checkpoint <= old(self).last_commit <= old(self).filesystem@.len()
@@ -145,13 +145,25 @@ impl <T: Copy, const N : usize> Journal<T, N>
 
                 0 <= old(self).last_checkpoint <= self.last_checkpoint <= self.last_commit <= self.filesystem@.len(),
 
-                forall |i : int| old(self).last_checkpoint <= i < self.last_checkpoint ==> #[trigger] self.filesystem@[i] == self@[i]
+                self@.subrange(old(self).last_checkpoint as int, self.last_checkpoint as int) 
+                =~= self.filesystem@.subrange(old(self).last_checkpoint as int, self.last_checkpoint as int)
 
         decreases self.last_commit - self.last_checkpoint
         {
+            broadcast use lemma_seq_subrange_index2;
             self.filesystem.set_block(self.last_checkpoint, self.log[self.last_checkpoint]);
             self.last_checkpoint = self.last_checkpoint + 1; 
         }
     }
 }
+
+broadcast proof fn lemma_seq_subrange_index2<A>(s: Seq<A>, j: int, k: int, i: int)
+        requires
+            0 <= j <= k <= s.len(),
+            0 <= i - j < k - j,
+        ensures
+            // DANGER: might cause matching loop with axiom_seq_subrange_index
+            (#[trigger] s.subrange(j, k))[i - j] == #[trigger] s[i],
+    {
+    }
 }
