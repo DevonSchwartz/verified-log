@@ -3,7 +3,7 @@ use vstd::prelude::*;
 verus!
 {
 
-pub struct Filesystem<T: Copy, const N: usize> 
+pub struct Filesystem<T, const N: usize> 
 {
     filesystem: [T; N]
 }
@@ -20,7 +20,6 @@ impl<T: Copy, const N: usize> View for Filesystem<T, N>
         self.filesystem@
     }
 }
-
 
 impl <T: Copy, const N: usize> Filesystem<T, N> 
 {
@@ -49,7 +48,7 @@ impl <T: Copy, const N: usize> Filesystem<T, N>
     }
 }
 
-pub struct Journal<T: Copy, const N : usize> 
+pub struct Journal<T, const N : usize> 
 {
     pub log: [T;N], 
     pub last_commit: usize, // exclusive bound of last item comitted  
@@ -101,8 +100,11 @@ impl <T: Copy, const N : usize> Journal<T, N>
         requires
             0 <= old(self).last_checkpoint <= old(self).last_commit <= old(self).write_ptr < N,
         ensures
+            old(self).last_checkpoint == self.last_checkpoint,
+            old(self).last_commit == self.last_commit,
+            self.write_ptr == old(self).write_ptr + 1,
             0 <= self.last_checkpoint <= self.last_commit <= self.write_ptr <= N,
-            self@[old(self).write_ptr as int] == data
+            self@ == old(self)@.update(old(self).write_ptr as int, data)
         {
             self.log[self.write_ptr] = data;
             self.write_ptr = self.write_ptr + 1;
