@@ -53,7 +53,7 @@ impl <T: Copy, const N: usize> Filesystem<T, N>
         ensures
             self@[index as int] == out
         {
-            return &self.filesystem[index]
+            &self.filesystem[index]
         }
 }
 
@@ -63,6 +63,7 @@ pub struct Journal<T, const N : usize>
     pub last_commit: usize, // exclusive bound of last item comitted  
     pub last_checkpoint: usize, // 0 <= i < checkpoint items were written to filesystem
     pub write_ptr: usize, // where to make next write,
+    pub filesystem : Filesystem<T, N>
 }
 
 impl<T: Copy, const N: usize> View for Journal<T, N>
@@ -83,7 +84,7 @@ impl <T: Copy, const N : usize> Journal<T, N>
      * Craete a log for filesystem
      * The log should be empty 
     */
-    pub fn new(default_value: T) -> (out: Self)
+    pub fn new(default_value: T, filesystem: Filesystem<T, N>) -> (out: Self)
         ensures
             forall|i : int | 0 <= i < out@.len() ==> #[trigger] out@[i] == default_value,
             out.last_commit == 0,
@@ -96,6 +97,7 @@ impl <T: Copy, const N : usize> Journal<T, N>
                 last_commit: 0,
                 last_checkpoint: 0,
                 write_ptr: 0,
+                filesystem
             }
         }
 
@@ -122,30 +124,32 @@ impl <T: Copy, const N : usize> Journal<T, N>
      * Checkpoint data up to commit
      */
 
-    pub fn commit(&mut self, filesystem : &mut Filesystem<T, N>)
+    pub fn commit(&mut self)
         requires
             0 <= old(self).last_checkpoint <= old(self).last_commit <= old(self).write_ptr <= N,
         ensures
             old(self).write_ptr == self.write_ptr,
             0 <= self.last_checkpoint <= self.last_commit == self.write_ptr <= N,
             self@.subrange(old(self).last_checkpoint as int, self.last_checkpoint as int)  
-                == filesystem@.subrange(old(self).last_checkpoint as int, self.last_checkpoint as int)
+                == self.filesystem@.subrange(old(self).last_checkpoint as int, self.last_checkpoint as int)
         {
             self.last_commit = self.write_ptr;
-            self.checkpoint(filesystem);
+            self.checkpoint();
         }
 
-    
-    fn checkpoint(&mut self, filesystem : &mut Filesystem<T, N>)
+    /**
+     * Write data to the filesystem in range [checkpoint, commit)
+     */
+    fn checkpoint(&mut self)
         requires
-            0 <= old(self).last_checkpoint <= old(self).last_commit <= old(filesystem)@.len()
+            0 <= old(self).last_checkpoint <= old(self).last_commit <= old(self).filesystem@.len()
         ensures
             old(self).write_ptr == self.write_ptr, // this is still important to guarentee 
             old(self).last_commit == self.last_commit,
-            0 <= old(self).last_checkpoint <= self.last_checkpoint == self.last_commit <= filesystem@.len(),
+            0 <= old(self).last_checkpoint <= self.last_checkpoint == self.last_commit <= self.filesystem@.len(),
             self@ == old(self)@,
             self@.subrange(old(self).last_checkpoint as int, self.last_checkpoint as int)  
-                == filesystem@.subrange(old(self).last_checkpoint as int, self.last_checkpoint as int)
+                == self.filesystem@.subrange(old(self).last_checkpoint as int, self.last_checkpoint as int)
     {
         while self.last_checkpoint < self.last_commit
             invariant
@@ -154,16 +158,29 @@ impl <T: Copy, const N : usize> Journal<T, N>
 
                 old(self).last_commit == self.last_commit,
 
-                0 <= old(self).last_checkpoint <= self.last_checkpoint <= self.last_commit <= filesystem@.len(),
+                0 <= old(self).last_checkpoint <= self.last_checkpoint <= self.last_commit <= self.filesystem@.len(),
 
                 forall |i : int| old(self).last_checkpoint as int <= i < self.last_checkpoint ==> #[trigger]
-                    self@[i] == filesystem@[i] // WHY DOES FORALL BEHAVE DIFFERENTLY THAN SUBRANGE? 
+                    self@[i] == self.filesystem@[i] // WHY DOES FORALL BEHAVE DIFFERENTLY THAN SUBRANGE? 
 
         decreases self.last_commit - self.last_checkpoint
         { 
-            filesystem.set_block(self.last_checkpoint, self.log[self.last_checkpoint]);
+            self.filesystem.set_block(self.last_checkpoint, self.log[self.last_checkpoint]);
             self.last_checkpoint = self.last_checkpoint + 1; 
         }
+    }
+
+    /**
+     * Forwarding method for filesystem get_block. This is because 
+     * the log owns the filesystem
+     */
+    pub fn fs_get_block(&self, index : usize) -> (out: &T)
+        requires
+            0 <= (index  as int) < N,
+        ensures
+            self.filesystem@[index as int] == *out
+    {
+        self.filesystem.get_block(index)
     }
 }
 }
