@@ -51,7 +51,7 @@ impl <T: Copy, const N: usize> Filesystem<T, N>
         requires
             0 <= (index as int) < N,
         ensures
-            self@[index as int] == out
+            self@[index as int] == *out
         {
             &self.filesystem[index]
         }
