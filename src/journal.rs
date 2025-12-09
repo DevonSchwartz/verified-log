@@ -144,7 +144,7 @@ impl <T: Copy, const N : usize> Journal<T, N>
      */
     fn checkpoint(&mut self)
         requires
-            0 <= old(self).last_checkpoint <= old(self).last_commit <= old(self).filesystem@.len()
+            0 <= old(self).last_checkpoint <= old(self).last_commit <= old(self).write_ptr <= N 
         ensures
             old(self).write_ptr == self.write_ptr, // this is still important to guarentee 
             old(self).last_commit == self.last_commit,
