@@ -72,7 +72,7 @@ impl<T: Copy, const N: usize> View for Journal<T, N>
     type V = Seq<T>; 
 
     // the view of the journal should be a sequence of its data
-    closed spec fn view(&self) -> Seq<T>
+    open spec fn view(&self) -> Seq<T>
     {
         self.log@
     }
@@ -112,6 +112,7 @@ impl <T: Copy, const N : usize> Journal<T, N>
             old(self).last_checkpoint == self.last_checkpoint,
             old(self).last_commit == self.last_commit,
             self.write_ptr == old(self).write_ptr + 1,
+            old(self).filesystem@ == self.filesystem@, 
             0 <= self.last_checkpoint <= self.last_commit <= self.write_ptr <= N,
             self@ == old(self)@.update(old(self).write_ptr as int, data)
         {
@@ -130,7 +131,8 @@ impl <T: Copy, const N : usize> Journal<T, N>
         ensures
             old(self).write_ptr == self.write_ptr,
             0 <= self.last_checkpoint <= self.last_commit == self.write_ptr <= N,
-            self@.subrange(old(self).last_checkpoint as int, self.last_checkpoint as int)  
+            self@ == old(self)@, 
+            self@.subrange(old(self).last_checkpoint as int, self.last_checkpoint as int)
                 == self.filesystem@.subrange(old(self).last_checkpoint as int, self.last_checkpoint as int)
         {
             self.last_commit = self.write_ptr;
