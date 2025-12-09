@@ -148,8 +148,8 @@ impl <T: Copy, const N : usize> Journal<T, N>
         ensures
             old(self).write_ptr == self.write_ptr, // this is still important to guarentee 
             old(self).last_commit == self.last_commit,
-            0 <= self.last_checkpoint == self.last_commit <= self.write_ptr <= N,
             self@ == old(self)@,
+            0 <= self.last_checkpoint == self.last_commit <= self.write_ptr <= N,
             self@.subrange(old(self).last_checkpoint as int, self.last_checkpoint as int)  
                 == self.filesystem@.subrange(old(self).last_checkpoint as int, self.last_checkpoint as int)
     {
